@@ -1,12 +1,13 @@
 <script lang="ts">
   let inputText: string = '';
-  let response: string = '';
+  let response: string = ''; // Final response text to display
+  let displayedResponse: string = ''; // Text being typed out
   let error: string = '';
   let thinking: string = ''; // Current displayed thinking text
   let rawThinking: string = 'Processing your request...'; // Raw <think> content
   let isThinking: boolean = false;
   let displayThinking: boolean = false;
-  let displayResponse: boolean = false; // New variable to control response fade-in
+  let displayResponse: boolean = false; // Controls response visibility and animation trigger
 
   // Function to strip <think> tags and extract the final reply
   function cleanResponse(rawResponse: string): string {
@@ -22,7 +23,7 @@
     return thinkMatch && thinkMatch[1] ? thinkMatch[1].trim() : 'Processing your request...';
   }
 
-  // Simulate typing animation
+  // Simulate typing animation for thinking
   async function typeThinking(text: string) {
     thinking = '';
     displayThinking = true;
@@ -32,16 +33,25 @@
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
     // Pause before fading out thinking
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Adjustable linger time
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Linger time
     displayThinking = false; // Trigger fade-out
-    // Delay before showing response
-    await new Promise(resolve => setTimeout(resolve, 300)); // Adjustable transition gap
-    displayResponse = true; // Trigger response fade-in
+  }
+
+  // Simulate typing animation for response
+  async function typeResponse(text: string) {
+    displayedResponse = ''; // Reset displayed text
+    displayResponse = true; // Show response box and start animation
+    const typingSpeed = 10; // Milliseconds per character (adjustable)
+    for (let i = 0; i < text.length; i++) {
+      displayedResponse = text.slice(0, i + 1);
+      await new Promise(resolve => setTimeout(resolve, typingSpeed));
+    }
   }
 
   async function submitInput() {
     try {
       response = '';
+      displayedResponse = '';
       error = '';
       displayResponse = false; // Reset response visibility
       isThinking = true;
@@ -63,6 +73,8 @@
       rawThinking = extractThinking(data.reply);
       response = cleanResponse(data.reply); // Precompute response
       await typeThinking(rawThinking); // Type out thinking content
+      await new Promise(resolve => setTimeout(resolve, 300)); // Transition gap
+      await typeResponse(response); // Type out response content
     } catch (err) {
       if (err instanceof Error) {
         error = err.message || 'Failed to connect to the server. Please try again.';
@@ -90,7 +102,7 @@
   }
   .response {
     opacity: 0; /* Start hidden */
-    transition: opacity 1s ease; /* Smooth fade-in */
+    transition: opacity 0.5s ease; /* Fade-in for the container */
   }
   .response.visible {
     opacity: 1; /* Fully visible */
@@ -113,10 +125,10 @@
       <p>{thinking}</p>
     </div>
   {/if}
-  {#if response}
+  {#if displayResponse}
     <div class="mt-4 p-4 bg-gray-100 rounded response" class:visible={displayResponse}>
       <h2 class="font-semibold">Response:</h2>
-      <p>{response}</p>
+      <p>{displayedResponse}</p>
     </div>
   {/if}
   {#if error}
