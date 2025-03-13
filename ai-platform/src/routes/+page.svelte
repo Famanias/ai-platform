@@ -207,10 +207,9 @@
       {#each messages.filter(m => m.content && m.timestamp) as message}
         <div class="mb-4 flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
           <div class="{message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 border-l-4 border-blue-500'} p-3 rounded-lg max-w-[75%] shadow-sm flex items-start">
-            <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
-            {#if message.role === 'ai'}
-              <span class="font-semibold text-blue-600">AI:</span>
-            {/if}
+            <div>
+              <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
+            </div>
             <div>
               <p>{message.content}</p>
               <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p>
