@@ -2,7 +2,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { writeFile, readFile } from 'fs/promises';
 import { json } from '@sveltejs/kit';
-import { v4 as uuidv4 } from 'uuid'; // Install with `bun add uuid`
+import { v4 as uuidv4 } from 'uuid';
 
 interface Message {
   role: 'user' | 'ai';
@@ -49,13 +49,13 @@ async function createNewChat(): Promise<string> {
   return chatId;
 }
 
-export const GET: RequestHandler = async ({ url }) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': 'http://localhost:5173',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
+const corsHeaders = {
+  'Access-Control-Allow-Origin': 'http://localhost:5173',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
+export const GET: RequestHandler = async ({ url }) => {
   const chatId = url.searchParams.get('chatId');
   const history = await getHistory();
   if (chatId && history[chatId]) {
@@ -65,19 +65,20 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': 'http://localhost:5173',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
-
   try {
     const { chatId, messages } = await request.json();
+    const history = await getHistory();
+
+    if (chatId === null) {
+      // Create new chat
+      const newChatId = await createNewChat();
+      return json({ chatId: newChatId }, { headers: corsHeaders });
+    }
+
     if (!chatId || !Array.isArray(messages)) {
       return json({ error: 'Invalid chatId or messages format' }, { status: 400, headers: corsHeaders });
     }
 
-    const history = await getHistory();
     history[chatId] = messages;
     await saveHistory(history);
     return json({ success: true }, { headers: corsHeaders });
@@ -87,13 +88,25 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 };
 
+export const DELETE: RequestHandler = async ({ url }) => {
+  const chatId = url.searchParams.get('chatId');
+  if (!chatId) {
+    return json({ error: 'Chat ID is required' }, { status: 400, headers: corsHeaders });
+  }
+
+  const history = await getHistory();
+  if (!(chatId in history)) {
+    return json({ error: 'Chat not found' }, { status: 404, headers: corsHeaders });
+  }
+
+  delete history[chatId];
+  await saveHistory(history);
+  return json({ success: true }, { headers: corsHeaders });
+};
+
 export const OPTIONS: RequestHandler = async () => {
   return new Response(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': 'http://localhost:5173',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
+    headers: corsHeaders,
   });
 };

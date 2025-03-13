@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { slide } from 'svelte/transition'; // Import slide transition
-  import { v4 as uuidv4 } from 'uuid'; // Import uuidv4 function
 
   let inputText: string = '';
   let response: string = '';
@@ -39,42 +38,91 @@
       }
     } catch (error) {
       console.error('Failed to load chats:', error);
+      error = 'Failed to load chat history. Please try again.';
     }
   });
 
   async function createNewChat(): Promise<string> {
-    const res = await fetch('/server/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: null, messages: [] }),
-    });
-    const data = await res.json();
-    const chatId = data.chatId || uuidv4(); // Fallback to UUID
-    availableChats = [...availableChats, chatId];
-    if (currentChatId) await saveMessages(); // Save current chat before switching
-    currentChatId = chatId;
-    messages = [];
-    showHistory = false; // Close sidebar after creating new chat
-    return chatId;
+    try {
+      const res = await fetch('/server/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: null, messages: [] }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to create new chat');
+      }
+      const data = await res.json();
+      const chatId = data.chatId;
+      availableChats = [...availableChats, chatId];
+      if (currentChatId) await saveMessages(); // Save current chat before switching
+      currentChatId = chatId;
+      messages = [];
+      showHistory = false; // Close sidebar after creating new chat
+      return chatId;
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+      error = 'Failed to create new chat. Please try again.';
+      throw error;
+    }
   }
 
   async function loadChat(chatId: string) {
-    const res = await fetch(`/server/history?chatId=${chatId}`);
-    if (res.ok) {
-      messages = await res.json();
-      currentChatId = chatId;
-      showHistory = false; // Close sidebar after selection
-      chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+    try {
+      const res = await fetch(`/server/history?chatId=${chatId}`);
+      if (res.ok) {
+        messages = await res.json();
+        currentChatId = chatId;
+        showHistory = false; // Close sidebar after selection
+        chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+      } else {
+        throw new Error('Failed to load chat');
+      }
+    } catch (error) {
+      console.error('Error loading chat:', error);
+      error = 'Failed to load chat. Please try again.';
     }
   }
 
   async function saveMessages() {
     if (currentChatId) {
-      await fetch('/server/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: currentChatId, messages }),
+      try {
+        await fetch('/server/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: currentChatId, messages }),
+        });
+      } catch (error) {
+        console.error('Error saving messages:', error);
+        error = 'Failed to save messages. Please try again.';
+      }
+    }
+  }
+
+  async function deleteChat(chatId: string) {
+    if (!confirm('Are you sure you want to delete this chat?')) return;
+    try {
+      const res = await fetch(`/server/history?chatId=${chatId}`, {
+        method: 'DELETE',
       });
+      if (!res.ok) {
+        throw new Error('Failed to delete chat');
+      }
+      availableChats = availableChats.filter(id => id !== chatId);
+      if (currentChatId === chatId) {
+        if (availableChats.length > 0) {
+          // Load the first available chat
+          currentChatId = availableChats[0];
+          await loadChat(currentChatId);
+        } else {
+          // Create a new chat if no chats remain
+          currentChatId = await createNewChat();
+          availableChats = [currentChatId];
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      error = 'Failed to delete chat. Please try again.';
     }
   }
 
@@ -185,12 +233,20 @@
         New Chat
       </button>
       {#each availableChats as chatId}
-        <button
-          on:click={() => loadChat(chatId)}
-          class="w-full text-left p-2 bg-gray-100 hover:bg-gray-200 rounded-lg mb-1 {currentChatId === chatId ? 'bg-blue-200' : ''}"
-        >
-          Chat {chatId.slice(0, 8)}...
-        </button>
+        <div class="flex items-center w-full mb-1">
+          <button
+            on:click={() => loadChat(chatId)}
+            class="flex-1 text-left p-2 bg-gray-100 hover:bg-gray-200 rounded-lg {currentChatId === chatId ? 'bg-blue-200' : ''}"
+          >
+            Chat {chatId.slice(0, 8)}...
+          </button>
+          <button
+            on:click={() => deleteChat(chatId)}
+            class="ml-2 text-red-500 hover:text-red-700"
+          >
+            🗑️
+          </button>
+        </div>
       {/each}
       <button on:click={() => (showHistory = false)} class="mt-4 text-red-500 hover:underline">Close</button>
     </div>
@@ -207,12 +263,16 @@
       {#each messages.filter(m => m.content && m.timestamp) as message}
         <div class="mb-4 flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
           <div class="{message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 border-l-4 border-blue-500'} p-3 rounded-lg max-w-[75%] shadow-sm flex items-start">
-            <div>
-              <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
-            </div>
+            <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
             <div>
               <p>{message.content}</p>
-              <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p>
+              {#if message.role === 'user'}
+                <p class="text-xs text-gray-300 mt-1">{message.timestamp}</p>
+              {/if}
+              {#if message.role === 'ai'}
+                <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p>
+              {/if}
+              <!-- <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p> -->
             </div>
           </div>
         </div>

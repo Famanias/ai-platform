@@ -18,7 +18,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries: number
   throw new Error('Max retries reached for 503 Service Unavailable');
 }
 
-const HISTORY_FILE = 'user_history.json';
+const HISTORY_FILE = `${process.cwd()}/user_history.json`; // Align with server/history/+server.ts
 
 interface Message {
   role: 'user' | 'ai';
@@ -30,21 +30,25 @@ async function getHistory(): Promise<Message[]> {
   try {
     const data = await readFile(HISTORY_FILE, 'utf8');
     const parsed = JSON.parse(data);
-    if (!Array.isArray(parsed)) throw new Error('Invalid history format');
-    return parsed;
+    // Since this endpoint reads the entire history file, we need to extract messages from the current chat
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      // Return messages from all chats (for context), but we can modify this based on chatId if needed
+      return Object.values(parsed).flat() as Message[];
+    }
+    throw new Error('Invalid history format');
   } catch (error) {
     console.error('Error reading history:', error);
     return [];
   }
 }
 
-export const POST: RequestHandler = async ({ request }) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': 'http://localhost:5173',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
+const corsHeaders = {
+  'Access-Control-Allow-Origin': 'http://localhost:5173',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
+export const POST: RequestHandler = async ({ request }) => {
   try {
     const { text } = await request.json();
     if (!text) {
@@ -88,12 +92,6 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 export const GET: RequestHandler = async () => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': 'http://localhost:5173',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
-
   return new Response('AI Platform Server Endpoint is running!', {
     headers: corsHeaders,
   });
@@ -102,10 +100,6 @@ export const GET: RequestHandler = async () => {
 export const OPTIONS: RequestHandler = async () => {
   return new Response(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': 'http://localhost:5173',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
+    headers: corsHeaders,
   });
 };
