@@ -14,7 +14,7 @@
   let messages: Message[] = [];
   let chatContainer: HTMLDivElement;
   let availableChats: string[] = [];
-  let currentChatId: string | null = null;
+  let currentChatId: string | null = null; // null indicates the temporary empty chat
   let showHistory: boolean = false; // Toggle for history sidebar
 
   interface Message {
@@ -25,29 +25,34 @@
 
   onMount(async () => {
     try {
+      // Step 1: Start with a temporary empty chat (not saved to history yet)
+      console.log('Initializing with a temporary empty chat...');
+      currentChatId = null; // Temporary chat, not persisted
+      messages = [];
+
+      // Step 2: Fetch existing chat history to populate the sidebar
+      console.log('Fetching existing chat history...');
       const res = await fetch('/server/history');
-      if (res.ok) {
-        availableChats = await res.json();
-        if (availableChats.length > 0) {
-          currentChatId = availableChats[0]; // Load the most recent chat by default
-          await loadChat(currentChatId);
-        } else {
-          currentChatId = await createNewChat();
-          availableChats = [currentChatId];
-        }
+      if (!res.ok) {
+        throw new Error('Failed to fetch chat history');
       }
+      availableChats = await res.json();
+
+      console.log('Current chat ID:', currentChatId);
+      console.log('Available chats:', availableChats);
+      chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
     } catch (error) {
-      console.error('Failed to load chats:', error);
+      console.error('Failed to initialize:', error);
       error = 'Failed to load chat history. Please try again.';
     }
   });
 
-  async function createNewChat(): Promise<string> {
+  async function createNewChat(messagesToSave: Message[] = []): Promise<string> {
     try {
       const res = await fetch('/server/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: null, messages: [] }),
+        body: JSON.stringify({ chatId: null, messages: messagesToSave }),
       });
       if (!res.ok) {
         throw new Error('Failed to create new chat');
@@ -55,9 +60,6 @@
       const data = await res.json();
       const chatId = data.chatId;
       availableChats = [...availableChats, chatId];
-      if (currentChatId) await saveMessages(); // Save current chat before switching
-      currentChatId = chatId;
-      messages = [];
       showHistory = false; // Close sidebar after creating new chat
       return chatId;
     } catch (error) {
@@ -110,15 +112,9 @@
       }
       availableChats = availableChats.filter(id => id !== chatId);
       if (currentChatId === chatId) {
-        if (availableChats.length > 0) {
-          // Load the first available chat
-          currentChatId = availableChats[0];
-          await loadChat(currentChatId);
-        } else {
-          // Create a new chat if no chats remain
-          currentChatId = await createNewChat();
-          availableChats = [currentChatId];
-        }
+        // Revert to the temporary empty chat after deletion
+        currentChatId = null;
+        messages = [];
       }
     } catch (error) {
       console.error('Failed to delete chat:', error);
@@ -144,7 +140,7 @@
       thinking = text.slice(0, i + 1);
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 300));
     displayThinking = false;
   }
 
@@ -162,10 +158,17 @@
   }
 
   async function submitInput() {
-    if (!inputText.trim() || !currentChatId) return;
+    if (!inputText.trim()) return;
 
-    messages = [...messages, { role: 'user', content: inputText, timestamp: new Date().toLocaleTimeString() }];
-    await saveMessages();
+    // Step 1: If this is the temporary empty chat, create a new chat in history
+    if (currentChatId === null) {
+      const userMessage = { role: 'user' as const, content: inputText, timestamp: new Date().toLocaleTimeString() };
+      currentChatId = await createNewChat([userMessage]);
+      messages = [userMessage];
+    } else {
+      messages = [...messages, { role: 'user', content: inputText, timestamp: new Date().toLocaleTimeString() }];
+      await saveMessages();
+    }
 
     try {
       response = '';
@@ -227,7 +230,11 @@
     >
       <h2 class="text-lg font-semibold text-gray-800 mb-2">Chat History</h2>
       <button
-        on:click={() => createNewChat()}
+        on:click={() => {
+          currentChatId = null;
+          messages = [];
+          showHistory = false;
+        }}
         class="w-full bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg mb-2"
       >
         New Chat
@@ -266,13 +273,7 @@
             <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
             <div>
               <p>{message.content}</p>
-              {#if message.role === 'user'}
-                <p class="text-xs text-gray-300 mt-1">{message.timestamp}</p>
-              {/if}
-              {#if message.role === 'ai'}
-                <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p>
-              {/if}
-              <!-- <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p> -->
+              <p class="text-xs {message.role === 'user' ? 'text-gray-300' : 'text-gray-500'} mt-1">{message.timestamp}</p>
             </div>
           </div>
         </div>
