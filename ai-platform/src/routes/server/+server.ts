@@ -20,19 +20,22 @@ async function fetchWithRetry(url: string, options: RequestInit, retries: number
 
 const HISTORY_FILE = 'user_history.json';
 
-async function getHistory(): Promise<string[]> {
-  try {
-    const data = await readFile(HISTORY_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
+interface Message {
+  role: 'user' | 'ai';
+  content: string;
+  timestamp: string;
 }
 
-async function saveHistory(text: string) {
-  const history = await getHistory();
-  history.push(text);
-  await writeFile(HISTORY_FILE, JSON.stringify(history));
+async function getHistory(): Promise<Message[]> {
+  try {
+    const data = await readFile(HISTORY_FILE, 'utf8');
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) throw new Error('Invalid history format');
+    return parsed;
+  } catch (error) {
+    console.error('Error reading history:', error);
+    return [];
+  }
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -49,33 +52,20 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     console.log('Received text:', text);
-    await saveHistory(text);
-    console.log('History saved');
-
     const history = await getHistory();
-    console.log('History:', history);
-    const context = history.length ? `Previous inputs: ${history.join(', ')}. ` : '';
+    const userInputs = history.filter(msg => msg.role === 'user').map(msg => msg.content);
+    const context = userInputs.length ? `Previous inputs: ${userInputs.join(', ')}. ` : '';
 
     const ollamaResponse = await fetchWithRetry(
       'http://localhost:11434/api/chat',
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'deepseek-r1:7b',
-          messages: [
-            {
-              role: 'user',
-              content: `${context}Given this input: "${text}", provide a context-aware suggestion or response.`,
-            },
-          ],
+          messages: [{ role: 'user', content: `${context}Given this input: "${text}", provide a context-aware suggestion or response.` }],
           stream: false,
-          options: {
-            temperature: 0.6,
-            num_predict: 500, // Increased from 150 to 500
-          },
+          options: { temperature: 0.6, num_predict: 500 },
         }),
       },
       3,

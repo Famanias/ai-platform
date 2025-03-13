@@ -1,74 +1,137 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { slide } from 'svelte/transition'; // Import slide transition
+  import { v4 as uuidv4 } from 'uuid'; // Import uuidv4 function
+
   let inputText: string = '';
-  let response: string = ''; // Final response text to display
-  let displayedResponse: string = ''; // Text being typed out
+  let response: string = '';
+  let displayedResponse: string = '';
   let error: string = '';
-  let thinking: string = ''; // Current displayed thinking text
-  let rawThinking: string = 'Processing your request...'; // Raw <think> content
+  let thinking: string = '';
+  let rawThinking: string = 'Processing your request...';
   let isThinking: boolean = false;
   let displayThinking: boolean = false;
-  let displayResponse: boolean = false; // Controls response typing animation
-  let messages: { role: 'user' | 'ai', content: string }[] = []; // Store conversation history
+  let displayResponse: boolean = false;
+  let messages: Message[] = [];
+  let chatContainer: HTMLDivElement;
+  let availableChats: string[] = [];
+  let currentChatId: string | null = null;
+  let showHistory: boolean = false; // Toggle for history sidebar
 
-  // Function to strip <think> tags and extract the final reply
-  function cleanResponse(rawResponse: string): string {
-    const thinkMatch = rawResponse.match(/<think>[\s\S]*<\/think>\s*([\s\S]*)/);
-    return thinkMatch && thinkMatch[1]
-      ? thinkMatch[1].trim()
-      : "It looks like I got stuck thinking. Please try asking again or rephrase your question!";
+  interface Message {
+    role: 'user' | 'ai';
+    content: string;
+    timestamp: string;
   }
 
-  // Extract <think> content for typing
+  onMount(async () => {
+    try {
+      const res = await fetch('/server/history');
+      if (res.ok) {
+        availableChats = await res.json();
+        if (availableChats.length > 0) {
+          currentChatId = availableChats[0]; // Load the most recent chat by default
+          await loadChat(currentChatId);
+        } else {
+          currentChatId = await createNewChat();
+          availableChats = [currentChatId];
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load chats:', error);
+    }
+  });
+
+  async function createNewChat(): Promise<string> {
+    const res = await fetch('/server/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: null, messages: [] }),
+    });
+    const data = await res.json();
+    const chatId = data.chatId || uuidv4(); // Fallback to UUID
+    availableChats = [...availableChats, chatId];
+    if (currentChatId) await saveMessages(); // Save current chat before switching
+    currentChatId = chatId;
+    messages = [];
+    showHistory = false; // Close sidebar after creating new chat
+    return chatId;
+  }
+
+  async function loadChat(chatId: string) {
+    const res = await fetch(`/server/history?chatId=${chatId}`);
+    if (res.ok) {
+      messages = await res.json();
+      currentChatId = chatId;
+      showHistory = false; // Close sidebar after selection
+      chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+    }
+  }
+
+  async function saveMessages() {
+    if (currentChatId) {
+      await fetch('/server/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: currentChatId, messages }),
+      });
+    }
+  }
+
+  function cleanResponse(rawResponse: string): string {
+    const thinkMatch = rawResponse.match(/<think>[\s\S]*<\/think>\s*([\s\S]*)/);
+    return thinkMatch && thinkMatch[1] ? thinkMatch[1].trim() : "It looks like I got stuck thinking. Please try again!";
+  }
+
   function extractThinking(rawResponse: string): string {
     const thinkMatch = rawResponse.match(/<think>([\s\S]*)<\/think>/);
     return thinkMatch && thinkMatch[1] ? thinkMatch[1].trim() : 'Processing your request...';
   }
 
-  // Simulate typing animation for thinking
   async function typeThinking(text: string) {
     thinking = '';
     displayThinking = true;
-    const typingSpeed = 25; // Milliseconds per character
+    const typingSpeed = 25;
     for (let i = 0; i < text.length; i++) {
       thinking = text.slice(0, i + 1);
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Linger time
-    displayThinking = false; // Trigger fade-out
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    displayThinking = false;
   }
 
-  // Simulate typing animation for response
   async function typeResponse(text: string) {
-    displayedResponse = ''; // Reset displayed text
-    displayResponse = true; // Start animation
-    const typingSpeed = 10; // Milliseconds per character
+    displayedResponse = '';
+    displayResponse = true;
+    const typingSpeed = 10;
     for (let i = 0; i < text.length; i++) {
       displayedResponse = text.slice(0, i + 1);
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
-    displayResponse = false; // End animation
-    messages = [...messages, { role: 'ai', content: text }]; // Add to history after typing
+    displayResponse = false;
+    messages = [...messages, { role: 'ai', content: text, timestamp: new Date().toLocaleTimeString() }];
+    await saveMessages();
   }
 
   async function submitInput() {
-    if (!inputText.trim()) return; // Prevent empty submissions
+    if (!inputText.trim() || !currentChatId) return;
 
-    // Add user message to conversation history
-    messages = [...messages, { role: 'user', content: inputText }];
+    messages = [...messages, { role: 'user', content: inputText, timestamp: new Date().toLocaleTimeString() }];
+    await saveMessages();
 
     try {
       response = '';
       displayedResponse = '';
       error = '';
-      displayResponse = false; // Reset response visibility
+      displayResponse = false;
       isThinking = true;
       displayThinking = true;
       thinking = 'Processing your request...';
 
       const res = await fetch('/server', {
         method: 'POST',
-        body: JSON.stringify({ text: inputText }),
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: inputText }),
       });
 
       if (!res.ok) {
@@ -78,64 +141,87 @@
 
       const data = await res.json();
       rawThinking = extractThinking(data.reply);
-      response = cleanResponse(data.reply); // Precompute response
-      await typeThinking(rawThinking); // Type out thinking content
-      await new Promise(resolve => setTimeout(resolve, 300)); // Transition gap
-      await typeResponse(response); // Type out response content
+      response = cleanResponse(data.reply);
+      await typeThinking(rawThinking);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await typeResponse(response);
     } catch (err) {
-      if (err instanceof Error) {
-        error = err.message || 'Failed to connect to the server. Please try again.';
-      } else {
-        error = String(err) || 'An unexpected error occurred. Please try again.';
-      }
+      error = err instanceof Error ? err.message : String(err) || 'An unexpected error occurred.';
       displayThinking = false;
     } finally {
       isThinking = false;
-      inputText = ''; // Clear input after submission
+      inputText = '';
     }
   }
 </script>
 
-<main class="min-h-screen bg-gray-50 flex flex-col font-sans">
-  <!-- Header -->
-  <header class="bg-white shadow-sm p-4">
-    <div class="max-w-3xl mx-auto">
-      <h1 class="text-2xl font-bold text-gray-800">AI Platform</h1>
-      <p class="text-sm text-gray-500">Your context-aware assistant</p>
+<main class="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col font-sans relative">
+  <header class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md p-4 z-50">
+    <div class="max-w-3xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">AI Platform</h1>
+        <p class="text-sm">Your context-aware assistant</p>
+      </div>
+      <button
+        on:click={() => (showHistory = !showHistory)}
+        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
+      >
+        History
+      </button>
     </div>
   </header>
 
-  <!-- Chat Container -->
-  <div class="flex-1 max-w-3xl mx-auto w-full p-4 flex flex-col">
-    <div class="flex-1 bg-white rounded-lg shadow-md p-4 overflow-y-auto mb-4">
-      {#if messages.length === 0 && !displayThinking && !displayResponse}
+  <!-- History Sidebar (Animated) -->
+  {#if showHistory}
+    <div
+      class="fixed top-0 left-0 h-full bg-white shadow-lg w-64 p-4 z-50"
+      transition:slide={{ duration: 300, axis: 'x' }}
+    >
+      <h2 class="text-lg font-semibold text-gray-800 mb-2">Chat History</h2>
+      <button
+        on:click={() => createNewChat()}
+        class="w-full bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg mb-2"
+      >
+        New Chat
+      </button>
+      {#each availableChats as chatId}
+        <button
+          on:click={() => loadChat(chatId)}
+          class="w-full text-left p-2 bg-gray-100 hover:bg-gray-200 rounded-lg mb-1 {currentChatId === chatId ? 'bg-blue-200' : ''}"
+        >
+          Chat {chatId.slice(0, 8)}...
+        </button>
+      {/each}
+      <button on:click={() => (showHistory = false)} class="mt-4 text-red-500 hover:underline">Close</button>
+    </div>
+  {/if}
+
+  <div class="flex-1 max-w-3xl mx-auto w-full p-4 sm:p-6 flex flex-col z-50">
+    <div bind:this={chatContainer} class="flex-1 bg-white rounded-lg shadow-md p-4 overflow-y-auto mb-4">
+      {#if messages.length === 0 && !displayThinking && !displayResponse && !messages.some(m => m.content)}
         <div class="text-center text-gray-500 py-4">
           Start a conversation by typing a message below!
         </div>
       {/if}
 
-      {#each messages as message}
-        <div
-          class="mb-4 flex {message.role === 'user' ? 'justify-end' : 'justify-start'}"
-        >
-          <div
-            class="{message.role === 'user'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-100 text-gray-800'} p-3 rounded-lg max-w-[75%] shadow-sm"
-          >
+      {#each messages.filter(m => m.content && m.timestamp) as message}
+        <div class="mb-4 flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
+          <div class="{message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 border-l-4 border-blue-500'} p-3 rounded-lg max-w-[75%] shadow-sm flex items-start">
+            <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
             {#if message.role === 'ai'}
               <span class="font-semibold text-blue-600">AI:</span>
             {/if}
-            <p>{message.content}</p>
+            <div>
+              <p>{message.content}</p>
+              <p class="text-xs text-gray-500 mt-1">{message.timestamp}</p>
+            </div>
           </div>
         </div>
       {/each}
 
       {#if displayThinking}
         <div class="mb-4 flex justify-start">
-          <div
-            class="bg-gray-200 text-gray-600 p-3 rounded-lg max-w-[75%] shadow-sm"
-          >
+          <div class="bg-gray-200 text-gray-600 p-3 rounded-lg max-w-[75%] shadow-sm">
             <span class="font-semibold">Thinking:</span>
             <p>{thinking}</p>
           </div>
@@ -144,7 +230,7 @@
 
       {#if displayResponse}
         <div class="mb-4 flex justify-start">
-          <div class="bg-gray-100 text-gray-800 p-3 rounded-lg max-w-[75%] shadow-sm">
+          <div class="bg-gray-100 text-gray-800 border-l-4 border-blue-500 p-3 rounded-lg max-w-[75%] shadow-sm">
             <span class="font-semibold text-blue-600">AI:</span>
             <p>{displayedResponse}</p>
           </div>
@@ -152,8 +238,7 @@
       {/if}
     </div>
 
-    <!-- Input Form -->
-    <form on:submit|preventDefault={submitInput} class="flex gap-3">
+    <form on:submit|preventDefault={submitInput} class="flex flex-col sm:flex-row gap-3">
       <textarea
         bind:value={inputText}
         placeholder="Type your message..."
@@ -177,6 +262,7 @@
       <div class="mt-4 p-4 bg-red-100 text-red-700 rounded-lg">
         <h2 class="font-semibold">Error:</h2>
         <p>{error}</p>
+        <button on:click={submitInput} class="mt-2 text-blue-500 hover:underline">Retry</button>
       </div>
     {/if}
   </div>
