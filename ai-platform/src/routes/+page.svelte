@@ -131,7 +131,7 @@
     return thinkMatch && thinkMatch[1] ? thinkMatch[1].trim() : 'Processing your request...';
   }
 
-  async function typeThinking(text: string) {
+  async function typeThinking(text: string, userMessage: Message) {
     thinking = '';
     displayThinking = true;
     const typingSpeed = 25;
@@ -139,11 +139,15 @@
       thinking = text.slice(0, i + 1);
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
-    await new Promise(resolve => setTimeout(resolve, 300));
+    if (shouldStop) {
+      thinking = 'Request stopped.';
+      await new Promise(resolve => setTimeout(resolve, 500));
+      messages = messages.filter(m => m !== userMessage); // Remove user message here
+    }
     displayThinking = false;
   }
 
-  async function typeResponse(text: string) {
+  async function typeResponse(text: string, userMessage: Message) {
     displayedResponse = '';
     displayResponse = true;
     const typingSpeed = 10;
@@ -155,22 +159,14 @@
     if(!shouldStop) {
       messages = [...messages, { role: 'ai', content: text, timestamp: new Date().toLocaleTimeString() }];
       await saveMessages();
+    }else{
+      messages = messages.filter(m => m !== userMessage);
     }
     chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
   }
 
   async function submitInput() {
     if (!inputText.trim()) return;
-
-
-    // if (currentChatId === null) {
-    //   const userMessage = { role: 'user' as const, content: inputText, timestamp: new Date().toLocaleTimeString() };
-    //   currentChatId = await createNewChat([userMessage]);
-    //   messages = [userMessage];
-    // } else {
-    //   messages = [...messages, { role: 'user', content: inputText, timestamp: new Date().toLocaleTimeString() }];
-    //   await saveMessages();
-    // }
 
     const userMessage = { 
       role: 'user' as const, 
@@ -208,10 +204,10 @@
       const data = await res.json();
       rawThinking = extractThinking(data.reply);
       response = cleanResponse(data.reply);
-      await typeThinking(rawThinking);
+      await typeThinking(rawThinking, userMessage);
       if(!shouldStop) {
         await new Promise(resolve => setTimeout(resolve, 300));
-        await typeResponse(response);
+        await typeResponse(response, userMessage);
         if (shouldCreateNewChat) {
           currentChatId = await createNewChat(messages);
         } else {
