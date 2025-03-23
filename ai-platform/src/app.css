@@ -175,8 +175,8 @@
   color: #aaaaaa;
 }
 
-.submit-button {
-    background-color: #505050;
+.submit-button, .stop-button {
+    background-color: #aaaaaa;
     color: #eeeeee;
     padding: 0.5rem;
     border-radius: 9999px;
@@ -190,12 +190,7 @@
     align-self: flex-end; /* Aligns button to the right */
   }
 
-.submit-button:hover {
-  background-color: #aaaaaa;
-}
-
 .submit-button:disabled {
-  background-color: #aaaaaa;
   cursor: not-allowed;
 }
 

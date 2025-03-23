@@ -16,6 +16,8 @@
   let availableChats: string[] = [];
   let currentChatId: string | null = null;
   let showHistory: boolean = false;
+  let abortController: AbortController | null = null;
+  let shouldStop: boolean = false;
 
   interface Message {
     role: 'user' | 'ai';
@@ -133,7 +135,7 @@
     thinking = '';
     displayThinking = true;
     const typingSpeed = 25;
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0; i < text.length && !shouldStop; i++) {
       thinking = text.slice(0, i + 1);
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
@@ -145,27 +147,39 @@
     displayedResponse = '';
     displayResponse = true;
     const typingSpeed = 10;
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0; i < text.length && !shouldStop; i++) {
       displayedResponse = text.slice(0, i + 1);
       await new Promise(resolve => setTimeout(resolve, typingSpeed));
     }
     displayResponse = false;
-    messages = [...messages, { role: 'ai', content: text, timestamp: new Date().toLocaleTimeString() }];
-    await saveMessages();
+    if(!shouldStop) {
+      messages = [...messages, { role: 'ai', content: text, timestamp: new Date().toLocaleTimeString() }];
+      await saveMessages();
+    }
     chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
   }
 
   async function submitInput() {
     if (!inputText.trim()) return;
 
-    if (currentChatId === null) {
-      const userMessage = { role: 'user' as const, content: inputText, timestamp: new Date().toLocaleTimeString() };
-      currentChatId = await createNewChat([userMessage]);
-      messages = [userMessage];
-    } else {
-      messages = [...messages, { role: 'user', content: inputText, timestamp: new Date().toLocaleTimeString() }];
-      await saveMessages();
-    }
+
+    // if (currentChatId === null) {
+    //   const userMessage = { role: 'user' as const, content: inputText, timestamp: new Date().toLocaleTimeString() };
+    //   currentChatId = await createNewChat([userMessage]);
+    //   messages = [userMessage];
+    // } else {
+    //   messages = [...messages, { role: 'user', content: inputText, timestamp: new Date().toLocaleTimeString() }];
+    //   await saveMessages();
+    // }
+
+    const userMessage = { 
+      role: 'user' as const, 
+      content: inputText, 
+      timestamp: new Date().toLocaleTimeString() 
+    };
+    messages = [...messages, userMessage];
+
+    let shouldCreateNewChat = currentChatId === null;
 
     try {
       response = '';
@@ -175,11 +189,15 @@
       isThinking = true;
       displayThinking = true;
       thinking = 'Processing your request...';
+      shouldStop = false;
+
+      abortController = new AbortController();
 
       const res = await fetch('/server', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: inputText }),
+        signal: abortController.signal
       });
 
       if (!res.ok) {
@@ -191,15 +209,43 @@
       rawThinking = extractThinking(data.reply);
       response = cleanResponse(data.reply);
       await typeThinking(rawThinking);
-      await new Promise(resolve => setTimeout(resolve, 300));
-      await typeResponse(response);
+      if(!shouldStop) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await typeResponse(response);
+        if (shouldCreateNewChat) {
+          currentChatId = await createNewChat(messages);
+        } else {
+          await saveMessages();
+        }
+      }
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err) || 'An unexpected error occurred.';
-      displayThinking = false;
+      if (err instanceof Error && err.name === 'AbortError') {
+        thinking = 'Request stopped.';
+        await new Promise(resolve => setTimeout(resolve, 500));
+        displayThinking = false;
+        messages = messages.filter(m => m !== userMessage);
+      }else{
+        error = err instanceof Error ? err.message : String(err) || 'An unexpected error occurred.';
+        displayThinking = false;
+        if (shouldCreateNewChat) {
+          currentChatId = await createNewChat(messages);
+        } else {
+          await saveMessages();
+        }
+      }
     } finally {
       isThinking = false;
       inputText = '';
+      abortController = null;
+      shouldStop = false;
     }
+  }
+
+  function stopRequest() {
+    if (abortController) {
+      abortController.abort();
+    }
+    shouldStop = true;
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -212,7 +258,10 @@
 
 <main class="chat-app">
   <div class="chat-content">
-    <button class="toggle-button {showHistory ? 'active' : ''}" on:click={() => (showHistory = !showHistory)} title={showHistory ? 'Hide History' : 'Show History'}>
+    <button
+      class="toggle-button {showHistory ? 'active' : ''}" on:click={() => (showHistory = !showHistory)}
+      title={showHistory ? 'Hide History' : 'Show History'}
+      aria-label={showHistory ? 'Hide History' : 'Show History'}>
       <img src="/32223.png" alt="Show history" class="icon" transition:fade={{ duration: 200 }} />
     </button>
     <div class="chat-container" bind:this={chatContainer}>
@@ -251,15 +300,36 @@
     </div>
     <div class="input-area">
       <form class="chat-form" on:submit|preventDefault={submitInput}>
-        <textarea class="chat-input" bind:value={inputText} placeholder="Type your message.." rows="2" on:keydown={handleKeydown}></textarea>
-        <button type="submit" class="submit-button" disabled={isThinking}>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#252525" style="width: 1.25rem; height: 1.25rem;">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-          </svg>
-          {#if isThinking}
-            <span style="animation: pulse 1s infinite;"></span>
-          {/if}
-        </button>
+        <textarea 
+          class="chat-input" 
+          bind:value={inputText} 
+          placeholder="Type your message.." 
+          rows="2" 
+          on:keydown={handleKeydown}
+        ></textarea>
+        
+        {#if isThinking}
+          <button 
+            type="button" 
+            class="stop-button" 
+            on:click={stopRequest}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#252525" style="width: 1.25rem; height: 1.25rem;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6h12v12H6z" />
+            </svg>
+          </button>
+        {:else}
+          <button 
+            type="submit" 
+            class="submit-button" 
+            disabled={!inputText.trim()}
+            aria-label="Submit message"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#252525" style="width: 1.25rem; height: 1.25rem;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </button>
+        {/if}
       </form>
     </div>
   </div>
@@ -267,7 +337,7 @@
     <div class="sidebar" transition:fade={{ duration: 300}}>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2>Chat History</h2>
-        <button class="close-button" on:click={() => (showHistory = false)}>✕</button>
+        <button class="close-button" on:click={() => (showHistory = false)} aria-label="Close history">✕</button>
       </div>
       <button
         class="new-chat-button"
@@ -288,7 +358,7 @@
             <p>Chat {chatId.slice(0, 8)}...</p>
             <p>Yesterday</p>
           </button>
-          <button class="delete-button" on:click={() => deleteChat(chatId)}>🗑️</button>
+          <button class="delete-button" on:click={() => deleteChat(chatId)} aria-label="Delete chat">🗑️</button>
         </div>
       {/each}
     </div>
