@@ -1,0 +1,9 @@
+{
+    "user_information":{
+      "name": "Fam",
+      "preferred_language": "English",
+      "interests": ["technology", "science fiction", "gaming", "Marvel Comics"],
+      "location": "Olongapo City, Philippines",
+      "tone_preference": "casual"
+    }
+  }
