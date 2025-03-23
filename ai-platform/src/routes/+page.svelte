@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { slide } from 'svelte/transition'; // Import slide transition
+  import { fade } from 'svelte/transition';
 
   let inputText: string = '';
   let response: string = '';
@@ -14,8 +14,8 @@
   let messages: Message[] = [];
   let chatContainer: HTMLDivElement;
   let availableChats: string[] = [];
-  let currentChatId: string | null = null; // null indicates the temporary empty chat
-  let showHistory: boolean = false; // Toggle for history sidebar
+  let currentChatId: string | null = null;
+  let showHistory: boolean = false;
 
   interface Message {
     role: 'user' | 'ai';
@@ -25,12 +25,10 @@
 
   onMount(async () => {
     try {
-      // Step 1: Start with a temporary empty chat (not saved to history yet)
       console.log('Initializing with a temporary empty chat...');
-      currentChatId = null; // Temporary chat, not persisted
+      currentChatId = null;
       messages = [];
 
-      // Step 2: Fetch existing chat history to populate the sidebar
       console.log('Fetching existing chat history...');
       const res = await fetch('/server/history');
       if (!res.ok) {
@@ -60,7 +58,7 @@
       const data = await res.json();
       const chatId = data.chatId;
       availableChats = [...availableChats, chatId];
-      showHistory = false; // Close sidebar after creating new chat
+      showHistory = false;
       return chatId;
     } catch (error) {
       console.error('Error creating new chat:', error);
@@ -75,7 +73,7 @@
       if (res.ok) {
         messages = await res.json();
         currentChatId = chatId;
-        showHistory = false; // Close sidebar after selection
+        showHistory = false;
         chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
       } else {
         throw new Error('Failed to load chat');
@@ -112,7 +110,6 @@
       }
       availableChats = availableChats.filter(id => id !== chatId);
       if (currentChatId === chatId) {
-        // Revert to the temporary empty chat after deletion
         currentChatId = null;
         messages = [];
       }
@@ -155,12 +152,12 @@
     displayResponse = false;
     messages = [...messages, { role: 'ai', content: text, timestamp: new Date().toLocaleTimeString() }];
     await saveMessages();
+    chatContainer?.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
   }
 
   async function submitInput() {
     if (!inputText.trim()) return;
 
-    // Step 1: If this is the temporary empty chat, create a new chat in history
     if (currentChatId === null) {
       const userMessage = { role: 'user' as const, content: inputText, timestamp: new Date().toLocaleTimeString() };
       currentChatId = await createNewChat([userMessage]);
@@ -204,126 +201,96 @@
       inputText = '';
     }
   }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submitInput();
+    }
+  }
 </script>
 
-<main class="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col font-sans relative">
-  <header class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md p-4 z-50">
-    <div class="max-w-3xl mx-auto flex justify-between items-center">
-      <div>
-        <h1 class="text-2xl font-bold">AI Platform</h1>
-        <p class="text-sm">Your context-aware assistant</p>
-      </div>
-      <button
-        on:click={() => (showHistory = !showHistory)}
-        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
-      >
-        History
-      </button>
-    </div>
-  </header>
-
-  <!-- History Sidebar (Animated) -->
-  {#if showHistory}
-    <div
-      class="fixed top-0 left-0 h-full bg-white shadow-lg w-64 p-4 z-50"
-      transition:slide={{ duration: 300, axis: 'x' }}
-    >
-      <h2 class="text-lg font-semibold text-gray-800 mb-2">Chat History</h2>
-      <button
-        on:click={() => {
-          currentChatId = null;
-          messages = [];
-          showHistory = false;
-        }}
-        class="w-full bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg mb-2"
-      >
-        New Chat
-      </button>
-      {#each availableChats as chatId}
-        <div class="flex items-center w-full mb-1">
-          <button
-            on:click={() => loadChat(chatId)}
-            class="flex-1 text-left p-2 bg-gray-100 hover:bg-gray-200 rounded-lg {currentChatId === chatId ? 'bg-blue-200' : ''}"
-          >
-            Chat {chatId.slice(0, 8)}...
-          </button>
-          <button
-            on:click={() => deleteChat(chatId)}
-            class="ml-2 text-red-500 hover:text-red-700"
-          >
-            🗑️
-          </button>
-        </div>
-      {/each}
-      <button on:click={() => (showHistory = false)} class="mt-4 text-red-500 hover:underline">Close</button>
-    </div>
-  {/if}
-
-  <div class="flex-1 max-w-3xl mx-auto w-full p-4 sm:p-6 flex flex-col z-50">
-    <div bind:this={chatContainer} class="flex-1 bg-white rounded-lg shadow-md p-4 overflow-y-auto mb-4">
+<main class="chat-app">
+  <div class="chat-content">
+    <button class="toggle-button" on:click={() => (showHistory = !showHistory)}>
+      {#if showHistory}✕{:else}☰{/if}
+    </button>
+    <div class="chat-container" bind:this={chatContainer}>
       {#if messages.length === 0 && !displayThinking && !displayResponse && !messages.some(m => m.content)}
-        <div class="text-center text-gray-500 py-4">
+        <div class="text-center py-4">
           Start a conversation by typing a message below!
         </div>
       {/if}
-
       {#each messages.filter(m => m.content && m.timestamp) as message}
-        <div class="mb-4 flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
-          <div class="{message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 border-l-4 border-blue-500'} p-3 rounded-lg max-w-[75%] shadow-sm flex items-start">
-            <span class="mr-2">{message.role === 'user' ? '👤' : '🤖'}</span>
+        <div class="message-wrapper {message.role}">
+          <div class="message {message.role === 'user' ? 'user-message' : 'ai-message'}">
+            <span>{message.role === 'user' ? '👤' : '🤖'}</span>
             <div>
               <p>{message.content}</p>
-              <p class="text-xs {message.role === 'user' ? 'text-gray-300' : 'text-gray-500'} mt-1">{message.timestamp}</p>
+              <p class="timestamp">{message.timestamp}</p>
             </div>
           </div>
         </div>
       {/each}
-
       {#if displayThinking}
-        <div class="mb-4 flex justify-start">
-          <div class="bg-gray-200 text-gray-600 p-3 rounded-lg max-w-[75%] shadow-sm">
-            <span class="font-semibold">Thinking:</span>
+        <div class="message-wrapper ai">
+          <div class="thinking-message">
+            <span class="label">Thinking:</span>
             <p>{thinking}</p>
           </div>
         </div>
       {/if}
-
       {#if displayResponse}
-        <div class="mb-4 flex justify-start">
-          <div class="bg-gray-100 text-gray-800 border-l-4 border-blue-500 p-3 rounded-lg max-w-[75%] shadow-sm">
-            <span class="font-semibold text-blue-600">AI:</span>
+        <div class="message-wrapper ai">
+          <div class="ai-message">
+            <span class="label">AI:</span>
             <p>{displayedResponse}</p>
           </div>
         </div>
       {/if}
     </div>
-
-    <form on:submit|preventDefault={submitInput} class="flex flex-col sm:flex-row gap-3">
-      <textarea
-        bind:value={inputText}
-        placeholder="Type your message..."
-        rows="2"
-        class="flex-1 p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-      ></textarea>
-      <button
-        type="submit"
-        disabled={isThinking}
-        class="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg shadow-md transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-      >
-        {#if isThinking}
-          <span class="animate-pulse">...</span>
-        {:else}
-          Send
-        {/if}
-      </button>
-    </form>
-
-    {#if error}
-      <div class="mt-4 p-4 bg-red-100 text-red-700 rounded-lg">
-        <h2 class="font-semibold">Error:</h2>
-        <p>{error}</p>
-        <button on:click={submitInput} class="mt-2 text-blue-500 hover:underline">Retry</button>
-      </div>
-    {/if}
+    <div class="input-area">
+      <form class="chat-form" on:submit|preventDefault={submitInput}>
+        <textarea class="chat-input" bind:value={inputText} placeholder="Type your message.." rows="2" on:keydown={handleKeydown}></textarea>
+        <button type="submit" class="submit-button" disabled={isThinking}>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#252525" style="width: 1.25rem; height: 1.25rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+          {#if isThinking}
+            <span style="animation: pulse 1s infinite;"></span>
+          {/if}
+        </button>
+      </form>
+    </div>
   </div>
+  {#if showHistory}
+    <div class="sidebar" transition:fade={{ duration: 300}}>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>Chat History</h2>
+        <button class="close-button" on:click={() => (showHistory = false)}>X</button>
+      </div>
+      <button
+        class="new-chat-button"
+        on:click={() => {
+          currentChatId = null;
+          messages = [];
+          showHistory = false;
+        }}
+      >
+        New Chat
+      </button>
+      {#each availableChats as chatId}
+        <div style="display: flex; align-items: center; width: 100%; margin-bottom: 0.25rem;">
+          <button
+            class="chat-item {currentChatId === chatId ? 'selected' : ''}"
+            on:click={() => loadChat(chatId)}
+          >
+            <p>Chat {chatId.slice(0, 8)}...</p>
+            <p>Yesterday</p>
+          </button>
+          <button class="delete-button" on:click={() => deleteChat(chatId)}>🗑️</button>
+        </div>
+      {/each}
+    </div>
+  {/if}
 </main>

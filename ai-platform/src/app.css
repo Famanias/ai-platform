@@ -2,3 +2,279 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+
+/* Chat App */
+.chat-app {
+  background-color: #252525;
+  color: #eeeeee;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: sans-serif;
+  position: relative;
+}
+
+/* Chat Content Wrapper */
+.chat-content {
+  flex: 1;
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: #252525;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  width: 16rem;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.sidebar h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #eeeeee;
+  margin: 0;
+}
+
+.toggle-button {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 150; /* Higher than sidebar (100) */
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+  
+  .toggle-button:hover {
+    color: #eeeeee;
+  }
+  
+.close-button {
+  color: #aaaaaa;
+  font-size: 0.875rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.close-button:hover {
+  color: #eeeeee;
+}
+
+/* Chat Container */
+.chat-container {
+  flex: 1;
+  background-color: #252525;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  padding: 1rem;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+/* Messages */
+.message-wrapper {
+  margin-bottom: 1rem;
+  display: flex;
+}
+
+.message-wrapper.user {
+  justify-content: flex-end;
+}
+
+.message-wrapper.ai {
+  justify-content: flex-start;
+}
+
+.message {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  max-width: 75%;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: flex-start;
+}
+
+.message > span {
+  margin-right: 0.5rem;
+}
+
+.user-message {
+  background-color: #505050;
+  color: #eeeeee;
+}
+
+.ai-message {
+  background-color: #252525;
+  color: #eeeeee;
+  border-left: 4px solid #505050;
+}
+
+.thinking-message {
+  color: #aaaaaa;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.timestamp {
+  color: #aaaaaa;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+/* Input Area */
+.input-area {
+  position: sticky;
+  bottom: 0;
+  padding-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background-color: #1e1e1e;
+  border-radius: 0.5rem;
+  border: 1px solid #505050;
+}
+
+.chat-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+.chat-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  background-color: #1e1e1e;
+  color: #eeeeee;
+  border-radius: 0.5rem;
+  box-shadow: none;
+  resize: none;
+}
+
+.chat-input::placeholder {
+  color: #aaaaaa;
+}
+
+.submit-button {
+    background-color: #505050;
+    color: #eeeeee;
+    padding: 0.5rem;
+    border-radius: 9999px;
+    cursor: pointer;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end; /* Aligns button to the right */
+  }
+
+.submit-button:hover {
+  background-color: #aaaaaa;
+}
+
+.submit-button:disabled {
+  background-color: #aaaaaa;
+  cursor: not-allowed;
+}
+
+/* Sidebar Buttons */
+.new-chat-button {
+  width: 100%;
+  background-color: #505050;
+  color: #eeeeee;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  border: none;
+  cursor: pointer;
+}
+
+.new-chat-button:hover {
+  background-color: #aaaaaa;
+}
+
+.chat-item {
+  flex: 1;
+  text-align: left;
+  padding: 0.5rem;
+  background-color: #252525;
+  color: #eeeeee;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+}
+
+.chat-item:hover {
+  background-color: #505050;
+}
+
+.chat-item.selected {
+  background-color: #505050;
+}
+
+.chat-item p {
+  color: #eeeeee;
+  margin: 0;
+}
+
+.chat-item p:nth-child(2) {
+  color: #aaaaaa;
+  font-size: 0.75rem;
+}
+
+.delete-button {
+  margin-left: 0.5rem;
+  color: #aaaaaa;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  color: #eeeeee;
+}
+
+/* Animations */
+.pulse {
+  margin-left: 0.25rem;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.text-center{
+    color: #aaaaaa;
+}
+
