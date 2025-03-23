@@ -212,8 +212,8 @@
 
 <main class="chat-app">
   <div class="chat-content">
-    <button class="toggle-button" on:click={() => (showHistory = !showHistory)}>
-      {#if showHistory}✕{:else}☰{/if}
+    <button class="toggle-button {showHistory ? 'active' : ''}" on:click={() => (showHistory = !showHistory)} title={showHistory ? 'Hide History' : 'Show History'}>
+      <img src="/32223.png" alt="Show history" class="icon" transition:fade={{ duration: 200 }} />
     </button>
     <div class="chat-container" bind:this={chatContainer}>
       {#if messages.length === 0 && !displayThinking && !displayResponse && !messages.some(m => m.content)}
@@ -267,7 +267,7 @@
     <div class="sidebar" transition:fade={{ duration: 300}}>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2>Chat History</h2>
-        <button class="close-button" on:click={() => (showHistory = false)}>X</button>
+        <button class="close-button" on:click={() => (showHistory = false)}>✕</button>
       </div>
       <button
         class="new-chat-button"

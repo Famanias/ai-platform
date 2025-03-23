@@ -278,3 +278,10 @@
     color: #aaaaaa;
 }
 
+.icon {
+    width: 5rem;
+    height: 2rem;
+    display: block;
+    transition: filter 0.3s ease; /* Smooth color transition */
+    filter: brightness(0) invert(1) hue-rotate(0deg);
+  }
