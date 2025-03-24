@@ -5,7 +5,7 @@ import { json } from '@sveltejs/kit';
 
 const HISTORY_FILE = `${process.cwd()}/user_history.json`;
 const USER_INFO_FILE = `${process.cwd()}/user_information.json`;
-const MODEL_INFO_FILE = `${process.cwd()}/model_information.json`; // Add this
+const MODEL_INFO_FILE = `${process.cwd()}/model_information.json`;
 
 interface Message {
   role: 'user' | 'ai';
@@ -15,7 +15,8 @@ interface Message {
 
 interface UserInfo {
   name: string;
-  preferred_language: string;
+  age: number;
+  personality: string[];
   interests: string[];
   location: string;
   tone_preference: string;
@@ -99,13 +100,14 @@ export const POST: RequestHandler = async ({ request }) => {
     console.log('Received text:', text);
     const history = await getHistory();
     const userInfo = await getUserInfo();
-    const modelInfo = await getModelInfo(); // Load model info
+    const modelInfo = await getModelInfo();
+
     const userInputs = history.filter(msg => msg.role === 'user').map(msg => msg.content);
     const historyContext = userInputs.length ? `Previous inputs: ${userInputs.join(', ')}. ` : '';
 
     // Build user info context
     const userContext = userInfo
-      ? `User info: Name: ${userInfo.name}, Location: ${userInfo.location}, Interests: ${userInfo.interests.join(', ')}, Preferred tone: ${userInfo.tone_preference}. `
+      ? `User info: Name: ${userInfo.name}, Age: ${userInfo.age}, Personality: ${userInfo.personality.join(', ')}, Location: ${userInfo.location}, Interests: ${userInfo.interests.join(', ')}, Preferred tone: ${userInfo.tone_preference}. `
       : 'No user info available. ';
 
     // Build model info context
@@ -124,7 +126,7 @@ export const POST: RequestHandler = async ({ request }) => {
           model: 'deepseek-r1:7b',
           messages: [{ role: 'user', content: fullPrompt }],
           stream: false,
-          options: { temperature: 0.6, num_predict: 500 },
+          options: { temperature: 0.6, num_predict: 600 },
         }),
       },
       3,
@@ -139,6 +141,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const data = await ollamaResponse.json();
     const reply = data.message?.content || 'No response generated';
+    
     return json({ reply }, { headers: corsHeaders });
   } catch (error) {
     console.error('Server error:', error);
@@ -146,11 +149,15 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 };
 
-// Keep GET and OPTIONS as they are
 export const GET: RequestHandler = async () => {
-  return new Response('AI Platform Server Endpoint is running!', { headers: corsHeaders });
+  return new Response('AI Platform Server Endpoint is running!', {
+    headers: corsHeaders,
+  });
 };
 
 export const OPTIONS: RequestHandler = async () => {
-  return new Response(null, { status: 204, headers: corsHeaders });
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
 };

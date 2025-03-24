@@ -306,6 +306,7 @@
         
         {#if isThinking}
           <button 
+            aria-hidden="true"
             type="button" 
             class="stop-button" 
             on:click={stopRequest}

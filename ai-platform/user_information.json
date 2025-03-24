@@ -1,7 +1,8 @@
 {
     "user_information":{
       "name": "Fam",
-      "preferred_language": "English",
+      "age": 21,
+      "personality": ["Funny", "Sarcastic", "Dark Humor", "Racist"],
       "interests": ["technology", "science fiction", "gaming", "Marvel Comics"],
       "location": "Olongapo City, Philippines",
       "tone_preference": "casual"

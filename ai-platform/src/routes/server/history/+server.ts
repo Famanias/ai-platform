@@ -41,14 +41,6 @@ async function saveHistory(history: ChatHistory) {
   }
 }
 
-async function createNewChat(): Promise<string> {
-  const chatId = uuidv4(); // Generate a unique ID
-  const history = await getHistory();
-  history[chatId] = [];
-  await saveHistory(history);
-  return chatId;
-}
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -69,19 +61,33 @@ export const POST: RequestHandler = async ({ request }) => {
     const { chatId, messages } = await request.json();
     const history = await getHistory();
 
-    if (chatId === null) {
-      // Create new chat
-      const newChatId = await createNewChat();
-      return json({ chatId: newChatId }, { headers: corsHeaders });
+    // Create a new chat only if no chatId is provided AND we have a complete pair of messages
+    if (!chatId) {
+      if (
+        Array.isArray(messages) &&
+        messages.length === 2 &&
+        messages[0].role === 'user' &&
+        messages[1].role === 'ai'
+      ) {
+        const newChatId = uuidv4();
+        history[newChatId] = messages;
+        await saveHistory(history);
+        return json({ chatId: newChatId }, { headers: corsHeaders });
+      } else {
+        return json(
+          { error: 'A new chat requires a pair of messages (user message and AI response).' },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+    } else {
+      // For existing chat, update messages
+      if (!Array.isArray(messages)) {
+        return json({ error: 'Invalid messages format' }, { status: 400, headers: corsHeaders });
+      }
+      history[chatId] = messages;
+      await saveHistory(history);
+      return json({ success: true }, { headers: corsHeaders });
     }
-
-    if (!chatId || !Array.isArray(messages)) {
-      return json({ error: 'Invalid chatId or messages format' }, { status: 400, headers: corsHeaders });
-    }
-
-    history[chatId] = messages;
-    await saveHistory(history);
-    return json({ success: true }, { headers: corsHeaders });
   } catch (error) {
     console.error('Server error:', error);
     return json({ error: 'Internal server error' }, { status: 500, headers: corsHeaders });
