@@ -16,6 +16,7 @@ interface Message {
 interface UserInfo {
   name: string;
   age: number;
+  gender: string;
   personality: string[];
   interests: string[];
   location: string;

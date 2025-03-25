@@ -2,7 +2,8 @@
     "user_information":{
       "name": "Fam",
       "age": 21,
-      "personality": ["Funny", "Sarcastic", "Dark Humor", "Racist"],
+      "gender": "male",
+      "personality": ["Funny", "Sarcastic", "Dark Humor"],
       "interests": ["technology", "science fiction", "gaming", "Marvel Comics"],
       "location": "Olongapo City, Philippines",
       "tone_preference": "casual"
