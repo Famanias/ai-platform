@@ -1,6 +1,7 @@
 // In src/routes/server/+server.ts
 import type { RequestHandler } from '@sveltejs/kit';
 import { writeFile, readFile } from 'fs/promises';
+import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 
 const HISTORY_FILE = `${process.cwd()}/user_history.json`;
@@ -71,20 +72,6 @@ async function getHistory(): Promise<Message[]> {
   }
 }
 
-// Existing fetchWithRetry function (unchanged)
-async function fetchWithRetry(url: string, options: RequestInit, retries: number = 3, delay: number = 2000): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
-    const response = await fetch(url, options);
-    if (response.status === 503) {
-      console.log(`503 Service Unavailable, retrying (${i + 1}/${retries}) after ${delay}ms...`);
-      if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, delay));
-      continue;
-    }
-    return response;
-  }
-  throw new Error('Max retries reached for 503 Service Unavailable');
-}
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -118,30 +105,34 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const fullPrompt = `${modelContext}${userContext}${historyContext}Given this input: "${text}", provide a context-aware suggestion or response.`;
 
-    const ollamaResponse = await fetchWithRetry(
-      'http://localhost:11434/api/chat',
+    const apiKey = env.GROQ_API_KEY;
+
+    const response = await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
-          model: 'deepseek-r1:7b',
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
           messages: [{ role: 'user', content: fullPrompt }],
-          stream: false,
-          options: { temperature: 0.6, num_predict: 600 },
+          temperature: 0.3,
+          max_tokens: 1024
         }),
-      },
-      3,
-      2000
+      }
     );
 
-    if (!ollamaResponse.ok) {
-      const errorText = await ollamaResponse.text();
-      console.log('Ollama API Error:', errorText);
-      return json({ error: `Failed to get response from Ollama: ${errorText}` }, { status: 500, headers: corsHeaders });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('API Error:', errorText);
+      return json({ error: `Failed to get response from Model: ${errorText}` }, { status: 500, headers: corsHeaders });
     }
 
-    const data = await ollamaResponse.json();
-    const reply = data.message?.content || 'No response generated';
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || 'No response generated';
+    console.log('Model reply:', response);
     
     return json({ reply }, { headers: corsHeaders });
   } catch (error) {

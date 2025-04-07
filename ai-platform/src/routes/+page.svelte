@@ -6,10 +6,6 @@
   let response: string = '';
   let displayedResponse: string = '';
   let error: string = '';
-  let thinking: string = '';
-  let rawThinking: string = 'Processing your request...';
-  let isThinking: boolean = false;
-  let displayThinking: boolean = false;
   let displayResponse: boolean = false;
   let messages: Message[] = [];
   let chatContainer: HTMLDivElement;
@@ -122,29 +118,7 @@
   }
 
   function cleanResponse(rawResponse: string): string {
-    const thinkMatch = rawResponse.match(/<think>[\s\S]*<\/think>\s*([\s\S]*)/);
-    return thinkMatch && thinkMatch[1] ? thinkMatch[1].trim() : "It looks like I got stuck thinking. Please try again!";
-  }
-
-  function extractThinking(rawResponse: string): string {
-    const thinkMatch = rawResponse.match(/<think>([\s\S]*)<\/think>/);
-    return thinkMatch && thinkMatch[1] ? thinkMatch[1].trim() : 'Processing your request...';
-  }
-
-  async function typeThinking(text: string, userMessage: Message) {
-    thinking = '';
-    displayThinking = true;
-    const typingSpeed = 25;
-    for (let i = 0; i < text.length && !shouldStop; i++) {
-      thinking = text.slice(0, i + 1);
-      await new Promise(resolve => setTimeout(resolve, typingSpeed));
-    }
-    if (shouldStop) {
-      thinking = 'Request stopped.';
-      await new Promise(resolve => setTimeout(resolve, 500));
-      messages = messages.filter(m => m !== userMessage); // Remove user message here
-    }
-    displayThinking = false;
+    return rawResponse.trim() || "I couldn't generate a response. Please try again!";
   }
 
   async function typeResponse(text: string, userMessage: Message) {
@@ -182,9 +156,6 @@
       displayedResponse = '';
       error = '';
       displayResponse = false;
-      isThinking = true;
-      displayThinking = true;
-      thinking = 'Processing your request...';
       shouldStop = false;
 
       abortController = new AbortController();
@@ -202,9 +173,7 @@
       }
 
       const data = await res.json();
-      rawThinking = extractThinking(data.reply);
       response = cleanResponse(data.reply);
-      await typeThinking(rawThinking, userMessage);
       if(!shouldStop) {
         await new Promise(resolve => setTimeout(resolve, 300));
         await typeResponse(response, userMessage);
@@ -216,13 +185,10 @@
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        thinking = 'Request stopped.';
         await new Promise(resolve => setTimeout(resolve, 500));
-        displayThinking = false;
         messages = messages.filter(m => m !== userMessage);
       }else{
         error = err instanceof Error ? err.message : String(err) || 'An unexpected error occurred.';
-        displayThinking = false;
         if (shouldCreateNewChat) {
           currentChatId = await createNewChat(messages);
         } else {
@@ -230,7 +196,6 @@
         }
       }
     } finally {
-      isThinking = false;
       inputText = '';
       abortController = null;
       shouldStop = false;
@@ -261,7 +226,7 @@
       <img src="/32223.png" alt="Show history" class="icon" transition:fade={{ duration: 200 }} />
     </button>
     <div class="chat-container" bind:this={chatContainer}>
-      {#if messages.length === 0 && !displayThinking && !displayResponse && !messages.some(m => m.content)}
+      {#if messages.length === 0 && !displayResponse && !messages.some(m => m.content)}
         <div class="text-center py-4">
           Start a conversation by typing a message below!
         </div>
@@ -277,14 +242,6 @@
           </div>
         </div>
       {/each}
-      {#if displayThinking}
-        <div class="message-wrapper ai">
-          <div class="thinking-message">
-            <span class="label">Thinking:</span>
-            <p>{thinking}</p>
-          </div>
-        </div>
-      {/if}
       {#if displayResponse}
         <div class="message-wrapper ai">
           <div class="ai-message">
@@ -304,18 +261,6 @@
           on:keydown={handleKeydown}
         ></textarea>
         
-        {#if isThinking}
-          <button 
-            aria-hidden="true"
-            type="button" 
-            class="stop-button" 
-            on:click={stopRequest}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#252525" style="width: 1.25rem; height: 1.25rem;">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6h12v12H6z" />
-            </svg>
-          </button>
-        {:else}
           <button 
             type="submit" 
             class="submit-button" 
@@ -326,7 +271,6 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
             </svg>
           </button>
-        {/if}
       </form>
     </div>
   </div>
